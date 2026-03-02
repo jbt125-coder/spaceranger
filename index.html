@@ -3,13 +3,20 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>WARP ZONE</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://www.youtube.com/iframe_api"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
-body{background:#000;overflow:hidden;font-family:'Orbitron','Courier New',monospace;touch-action:none;user-select:none;-webkit-user-select:none;}
+html{height:100%;overflow:hidden;}
+body{background:#000;overflow:hidden;font-family:'Orbitron','Courier New',monospace;touch-action:pan-x pan-y;user-select:none;-webkit-user-select:none;height:100%;height:100dvh;position:fixed;width:100%;-webkit-overflow-scrolling:none;}
+/* Fix 8: hide Safari UI bars in landscape */
+@media screen and (orientation:landscape){
+  body{height:100svh;}
+}
 #gameCanvas{display:block;position:fixed;top:0;left:0;width:100%;height:100%;}
 
 /* HUD */
@@ -50,6 +57,7 @@ body{background:#000;overflow:hidden;font-family:'Orbitron','Courier New',monosp
 .cogRow{display:flex;gap:7px;margin-bottom:7px;}
 .cogBtn{flex:1;background:transparent;border:1px solid rgba(0,212,255,0.28);border-radius:5px;color:rgba(0,212,255,0.8);font-size:8px;letter-spacing:1px;padding:7px 4px;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;}
 .cogBtn:hover{background:rgba(0,212,255,0.1);}
+.cogBtn.on{background:rgba(0,212,255,0.18);border-color:rgba(0,212,255,0.7);color:#00d4ff;}
 #musicStatus{font-size:8px;color:rgba(0,212,255,0.4);min-height:13px;margin-bottom:8px;}
 .volRow{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
 .volRow span{font-size:8px;letter-spacing:1px;color:rgba(0,212,255,0.5);min-width:58px;}
@@ -122,6 +130,8 @@ body{background:#000;overflow:hidden;font-family:'Orbitron','Courier New',monosp
   <div id="hudLeft">
     <div class="hud-lbl">SCORE</div>
     <div class="hud-val" id="scoreVal">0</div>
+    <div class="hud-lbl" style="margin-top:4px;">CREDITS</div>
+    <div class="hud-val" id="creditsVal" style="color:#ffdd44;text-shadow:0 0 10px rgba(255,220,68,0.5);">$0</div>
     <div class="hud-lbl" style="margin-top:4px;">SHIELD</div>
     <div id="shieldBar"><div id="shieldFill" style="width:100%"></div></div>
     <div class="hud-lbl" style="margin-top:4px;">LEVEL</div>
@@ -168,6 +178,13 @@ body{background:#000;overflow:hidden;font-family:'Orbitron','Courier New',monosp
       <div id="musicStatus">No music loaded</div>
       <div class="volRow"><span>MUSIC VOL</span><input type="range" class="volSlider" id="musicVol" min="0" max="100" value="60"></div>
       <div class="volRow"><span>SFX VOL</span><input type="range" class="volSlider" id="sfxVol" min="0" max="100" value="40"></div>
+    </div>
+    <div class="cogSection">
+      <label>AUTO-ZOOM</label>
+      <div class="cogRow">
+        <span style="font-size:9px;color:rgba(0,212,255,0.6);flex:1;">Zoom in when enemy nearby</span>
+        <button class="cogBtn on" id="autoZoomToggle" style="flex:0 0 48px;">ON</button>
+      </div>
     </div>
   </div>
 </div>
@@ -229,8 +246,20 @@ body{background:#000;overflow:hidden;font-family:'Orbitron','Courier New',monosp
   </div>
 </div>
 
-<!-- Screens -->
+<!-- Starport Shop -->
 
+<div id="shopOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.88);z-index:60;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:rgba(0,8,20,0.99);border:1px solid rgba(255,200,50,0.4);border-radius:14px;padding:22px 20px;max-width:380px;width:100%;max-height:90vh;overflow-y:auto;">
+    <div style="text-align:center;margin-bottom:16px;">
+      <div style="font-size:11px;letter-spacing:4px;color:#ffdd44;margin-bottom:4px;">⭐ STARPORT SHOP</div>
+      <div style="font-size:9px;color:rgba(255,220,68,0.5);letter-spacing:2px;">CREDITS: <span id="shopCredits" style="color:#ffdd44;">$0</span></div>
+    </div>
+    <div id="shopItems"></div>
+    <div style="text-align:center;margin-top:14px;">
+      <button id="closeShopBtn" style="background:transparent;border:1px solid rgba(255,200,50,0.4);border-radius:6px;color:rgba(255,200,50,0.7);font-family:'Orbitron',monospace;font-size:9px;letter-spacing:2px;padding:10px 28px;cursor:pointer;">LAUNCH</button>
+    </div>
+  </div>
+</div>
 <div class="screen hidden" id="gameOverScreen">
   <div class="go-h" style="color:#ff4444;text-shadow:0 0 40px rgba(255,68,68,0.6);">SOLAR SYSTEM LOST</div>
   <div class="go-sub">The AI delivered 10 warp cores. Your solar system was consumed.<br>Score: <span id="goScore">0</span> — Level: <span id="goLevel">1</span></div>
@@ -256,6 +285,7 @@ var targetZoom=1, minZoom=0.25, maxZoom=2;
 var WARP_CORNER  ={x:320, y:320};        // top-left
 var SOLAR_CORNER ={x:WW-600, y:WH-600};  // bottom-right
 var ALIEN_CORNER ={x:WW-400, y:400};     // top-right
+var STARPORT_POS ={x:380, y:WH-380};     // bottom-left
 
 /* ═══════════════════════════════════════════════════════════
    CANVAS
@@ -305,16 +335,16 @@ var keys={};
 window.addEventListener('keydown',function(e){
   keys[e.code]=true;
   if(e.code==='Space')e.preventDefault();
-  if(e.code==='Equal'||e.code==='NumpadAdd') targetZoom=Math.min(maxZoom,targetZoom*1.2);
-  if(e.code==='Minus'||e.code==='NumpadSubtract') targetZoom=Math.max(minZoom,targetZoom/1.2);
+  if(e.code==='Equal'||e.code==='NumpadAdd'){manualZoom=Math.min(maxZoom,manualZoom*1.2);targetZoom=manualZoom;}
+  if(e.code==='Minus'||e.code==='NumpadSubtract'){manualZoom=Math.max(minZoom,manualZoom/1.2);targetZoom=manualZoom;}
 });
 window.addEventListener('keyup',function(e){keys[e.code]=false;});
 
 // Mouse wheel zoom
 window.addEventListener('wheel',function(e){
   e.preventDefault();
-  if(e.deltaY<0) targetZoom=Math.min(maxZoom,targetZoom*1.1);
-  else targetZoom=Math.max(minZoom,targetZoom/1.1);
+  if(e.deltaY<0){manualZoom=Math.min(maxZoom,manualZoom*1.1);targetZoom=manualZoom;}
+  else{manualZoom=Math.max(minZoom,manualZoom/1.1);targetZoom=manualZoom;}
 },{passive:false});
 
 // Pinch to zoom
@@ -331,7 +361,7 @@ window.addEventListener('touchmove',function(e){
     var dx=e.touches[0].clientX-e.touches[1].clientX;
     var dy=e.touches[0].clientY-e.touches[1].clientY;
     var d=Math.sqrt(dx*dx+dy*dy);
-    if(lastPinchDist>0) targetZoom=Math.max(minZoom,Math.min(maxZoom,targetZoom*(d/lastPinchDist)));
+    if(lastPinchDist>0){manualZoom=Math.max(minZoom,Math.min(maxZoom,manualZoom*(d/lastPinchDist)));targetZoom=manualZoom;}
     lastPinchDist=d;
   }
 },{passive:true});
@@ -363,6 +393,23 @@ function randCols(){return PALETTES[rndI(0,PALETTES.length-1)];}
 ═══════════════════════════════════════════════════════════ */
 var score=0, level=1, gameActive=false;
 var playerCores=0, aiCores=0;
+var credits=0;
+var shopOpen=false;
+var upgrades={
+  extraShield:0,     // timer ms remaining
+  heatMissiles:0,
+  laserBlaster:0,
+  doubleFire:0,
+  deputies:[]        // array of deputy AI objects
+};
+var UPGRADE_DURATION=60000; // 1 minute
+var SHOP_ITEMS=[
+  {id:'extraShield',  name:'EXTRA SHIELD',   desc:'+5 shield (max 10)',     cost:150, icon:'🛡'},
+  {id:'heatMissiles', name:'HEAT MISSILES',  desc:'Homing missiles 1 min', cost:200, icon:'🚀'},
+  {id:'laserBlaster', name:'LASER BLASTER',  desc:'5s beam, 3s cooldown',  cost:250, icon:'⚡'},
+  {id:'doubleFire',   name:'DOUBLE FIRE',    desc:'Spread shot 1 min',     cost:175, icon:'🔫'},
+  {id:'deputy',       name:'AI DEPUTY',      desc:'Escort ship (max 2)',    cost:300, icon:'🤖'}
+];
 var alertTimer=0;
 var lastTime=0;
 
@@ -411,17 +458,22 @@ function spawnCore(){
 
 function spawnNexuses(){
   warpNexuses=[];
-  // 6 nexuses scattered around the map (avoiding corners)
   var positions=[
-    {x:WW*0.35,y:WH*0.2},{x:WW*0.65,y:WH*0.2},
-    {x:WW*0.2, y:WH*0.5},{x:WW*0.8, y:WH*0.5},
-    {x:WW*0.35,y:WH*0.78},{x:WW*0.62,y:WH*0.72}
+    {x:WW*0.32,y:WH*0.18},{x:WW*0.68,y:WH*0.15},
+    {x:WW*0.18,y:WH*0.48},{x:WW*0.82,y:WH*0.52},
+    {x:WW*0.38,y:WH*0.76},{x:WW*0.65,y:WH*0.70},
+    {x:WW*0.50,y:WH*0.30},{x:WW*0.55,y:WH*0.62}
   ];
-  for(var i=0;i<positions.length;i++){
+  // Fisher-Yates shuffle
+  for(var i=positions.length-1;i>0;i--){var j=rndI(0,i);var t=positions[i];positions[i]=positions[j];positions[j]=t;}
+  // One color-matched nexus per core color
+  for(var i=0;i<CORE_COLORS.length;i++){
+    var cd=CORE_COLORS[i];
     warpNexuses.push({
-      x:positions[i].x+rnd(-120,120),
-      y:positions[i].y+rnd(-120,120),
-      r:42, pulse:rnd(0,Math.PI*2), active:true
+      x:positions[i].x+rnd(-100,100),
+      y:positions[i].y+rnd(-100,100),
+      r:42, pulse:rnd(0,Math.PI*2), active:true,
+      color:cd.color, name:cd.name, rgb:cd.rgb
     });
   }
 }
@@ -437,8 +489,131 @@ var rechargeStation={
 };
 
 /* ═══════════════════════════════════════════════════════════
-   ASTEROIDS
+   STARPORT SHOP
 ═══════════════════════════════════════════════════════════ */
+var laserCooldown=0, laserActive=false, laserTimer=0;
+var missileCooldown=0;
+
+function openShop(){
+  if(shopOpen)return;
+  shopOpen=true;
+  document.getElementById('shopOverlay').style.display='flex';
+  renderShopItems();
+}
+function closeShop(){
+  shopOpen=false;
+  document.getElementById('shopOverlay').style.display='none';
+}
+document.getElementById('closeShopBtn').addEventListener('click',closeShop);
+
+function renderShopItems(){
+  document.getElementById('shopCredits').textContent='$'+credits;
+  var html='';
+  SHOP_ITEMS.forEach(function(item){
+    var active='';
+    var canBuy=credits>=item.cost;
+    if(item.id==='deputy'){
+      active=upgrades.deputies.filter(function(d){return d.alive;}).length+'/2 active';
+      canBuy=canBuy&&upgrades.deputies.filter(function(d){return d.alive;}).length<2;
+    } else if(upgrades[item.id]>0){
+      active=Math.ceil(upgrades[item.id]/1000)+'s left';
+    }
+    html+='<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,200,50,0.1);">';
+    html+='<span style="font-size:20px;">'+item.icon+'</span>';
+    html+='<div style="flex:1;">';
+    html+='<div style="font-size:10px;letter-spacing:2px;color:#ffdd44;font-family:Orbitron,monospace;">'+item.name+'</div>';
+    html+='<div style="font-size:9px;color:rgba(255,255,255,0.5);">'+item.desc+(active?' — <span style="color:#00ffaa;">'+active+'</span>':'')+'</div>';
+    html+='</div>';
+    html+='<button onclick="buyItem(\''+item.id+'\')" style="background:'+(canBuy?'rgba(255,200,50,0.15)':'rgba(60,60,60,0.3)')+';border:1px solid '+(canBuy?'rgba(255,200,50,0.5)':'rgba(100,100,100,0.3)')+';border-radius:5px;color:'+(canBuy?'#ffdd44':'rgba(100,100,100,0.5)')+';font-family:Orbitron,monospace;font-size:9px;padding:6px 10px;cursor:'+(canBuy?'pointer':'default')+';">$'+item.cost+'</button>';
+    html+='</div>';
+  });
+  document.getElementById('shopItems').innerHTML=html;
+}
+
+function buyItem(id){
+  var item=SHOP_ITEMS.find(function(i){return i.id===id;});
+  if(!item||credits<item.cost)return;
+  credits-=item.cost;
+  if(id==='extraShield'){
+    ship.shieldMax=Math.min(10,ship.shieldMax+5);
+    ship.shieldHp=Math.min(ship.shieldMax,ship.shieldHp+5);
+    upgrades.extraShield=UPGRADE_DURATION;
+  } else if(id==='deputy'){
+    if(upgrades.deputies.filter(function(d){return d.alive;}).length<2){
+      upgrades.deputies.push(makeDeputyAI());
+    }
+  } else {
+    upgrades[id]=upgrades[id]>0?upgrades[id]+UPGRADE_DURATION:UPGRADE_DURATION; // stack duration
+  }
+  sfxPickup();
+  renderShopItems();
+  updateHUD();
+}
+
+function makeDeputyAI(){
+  return{
+    x:STARPORT_POS.x+rnd(-50,50),y:STARPORT_POS.y+rnd(-50,50),
+    vx:0,vy:0,angle:0,trail:[],
+    shieldHp:5,shieldMax:5,alive:true,invincible:0,
+    fireTimer:rnd(1500,2500),color:'#00ffcc',name:'DEPUTY'
+  };
+}
+window.buyItem=buyItem;
+
+function updateDeputies(dt){
+  for(var i=upgrades.deputies.length-1;i>=0;i--){
+    var d=upgrades.deputies[i];
+    if(!d.alive){upgrades.deputies.splice(i,1);continue;}
+    if(d.invincible>0)d.invincible-=dt;
+    // Follow player, keep ~150 units away
+    var tdx=ship.x-d.x,tdy=ship.y-d.y,td=Math.sqrt(tdx*tdx+tdy*tdy)||1;
+    if(td>150){d.vx+=(tdx/td)*0.12;d.vy+=(tdy/td)*0.12;}
+    else if(td<80){d.vx-=(tdx/td)*0.08;d.vy-=(tdy/td)*0.08;}
+    d.vx*=0.90;d.vy*=0.90;
+    var spd=Math.sqrt(d.vx*d.vx+d.vy*d.vy)||1;
+    if(spd>3.5){d.vx=d.vx/spd*3.5;d.vy=d.vy/spd*3.5;}
+    d.x=Math.max(30,Math.min(WW-30,d.x+d.vx));
+    d.y=Math.max(30,Math.min(WH-30,d.y+d.vy));
+    d.angle=Math.atan2(d.vy,d.vx);
+    d.trail.push({x:d.x,y:d.y});if(d.trail.length>14)d.trail.shift();
+    // Attack nearest hunter/competitor
+    d.fireTimer-=dt;
+    if(d.fireTimer<=0){
+      d.fireTimer=rnd(1400,2200);
+      var nearest=null,nearD=9999999;
+      var targets=hunterAIs.concat(competitorAIs);
+      for(var j=0;j<targets.length;j++){if(!targets[j].alive)continue;var dd=dst(d.x,d.y,targets[j].x,targets[j].y);if(dd<nearD){nearD=dd;nearest=targets[j];}}
+      if(nearest&&nearD<400){
+        var fdx=nearest.x-d.x,fdy=nearest.y-d.y,fd=Math.sqrt(fdx*fdx+fdy*fdy)||1;
+        bullets.push({x:d.x,y:d.y,vx:(fdx/fd)*7,vy:(fdy/fd)*7,life:55,fromPlayer:true});sfxFire();
+      }
+    }
+    // Deputy hit by AI shots
+    for(var j=aiShots.length-1;j>=0;j--){
+      if(dst(aiShots[j].x,aiShots[j].y,d.x,d.y)<14){aiShots.splice(j,1);d.shieldHp--;if(d.shieldHp<=0){spawnParts(d.x,d.y,12,['#00ffcc','#ffffff'],3);d.alive=false;}}
+    }
+  }
+}
+
+function updateUpgrades(dt){
+  var ids=['extraShield','heatMissiles','laserBlaster','doubleFire'];
+  for(var i=0;i<ids.length;i++){
+    if(upgrades[ids[i]]>0){
+      upgrades[ids[i]]-=dt;
+      if(upgrades[ids[i]]<=0){
+        upgrades[ids[i]]=0;
+        if(ids[i]==='extraShield'){ship.shieldMax=5;ship.shieldHp=Math.min(5,ship.shieldHp);}
+        showAlert(ids[i].toUpperCase()+' UPGRADE EXPIRED',1800);
+      }
+    }
+  }
+  // Laser
+  if(laserActive){laserTimer-=dt;if(laserTimer<=0){laserActive=false;laserCooldown=3000;}}
+  if(laserCooldown>0)laserCooldown-=dt;
+  // Missile cooldown
+  if(missileCooldown>0)missileCooldown-=dt;
+  updateDeputies(dt);
+}
 var asteroids=[];
 var bullets=[];
 var particles=[];
@@ -588,7 +763,7 @@ var missiles=[]; // homing missiles
 /* ═══════════════════════════════════════════════════════════
    RESPAWN SYSTEM
 ═══════════════════════════════════════════════════════════ */
-var RESPAWN_TIME=30000; // 30 seconds
+var RESPAWN_TIME_MIN=20000, RESPAWN_TIME_MAX=40000;
 
 /* ═══════════════════════════════════════════════════════════
    JOYSTICK
@@ -714,15 +889,56 @@ document.getElementById('skipAudioBtn').addEventListener('click',function(){
 /* ═══════════════════════════════════════════════════════════
    ZOOM BUTTONS
 ═══════════════════════════════════════════════════════════ */
-document.getElementById('zoomIn').addEventListener('click',function(){targetZoom=Math.min(maxZoom,targetZoom*1.25);});
-document.getElementById('zoomOut').addEventListener('click',function(){targetZoom=Math.max(minZoom,targetZoom/1.25);});
+// Fix 1: Block Safari double-tap zoom and navigation gesture popups
+document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});
+document.addEventListener('gesturechange',function(e){e.preventDefault();},{passive:false});
+document.addEventListener('gestureend',function(e){e.preventDefault();},{passive:false});
+// Block double-tap zoom only on elements that aren't game controls
+var lastTap=0;
+document.addEventListener('touchstart',function(e){
+  if(e.touches.length>1){
+    // Only block multi-touch on non-game elements
+    var t=e.target;
+    if(!t.closest('#joystickWrap')&&!t.closest('#bThrust')&&!t.closest('#bFire')&&!t.closest('#zoomBtns')){
+      e.preventDefault();
+    }
+    return;
+  }
+  // Double-tap: only block on the canvas/background, not on controls
+  var t=e.target;
+  if(t===document.getElementById('gameCanvas')||t===document.body||t===document.documentElement){
+    var now=Date.now();
+    if(now-lastTap<300){e.preventDefault();}
+    lastTap=now;
+  }
+},{passive:false});
+// Block context menu (long-press popup on Safari)
+document.addEventListener('contextmenu',function(e){e.preventDefault();},{passive:false});
+
+// Fix 8: Hide Safari bars in landscape by scrolling to top on orientation change
+window.addEventListener('orientationchange',function(){
+  setTimeout(function(){window.scrollTo(0,1);},300);
+});
+
+var autoZoom=true;
+var manualZoom=0.7; // tracks user's chosen zoom level separate from auto-zoom
+
+document.getElementById('autoZoomToggle').addEventListener('click',function(){
+  autoZoom=!autoZoom;
+  this.textContent=autoZoom?'ON':'OFF';
+  this.classList.toggle('on',autoZoom);
+  if(!autoZoom) targetZoom=manualZoom;
+});
+
+document.getElementById('zoomIn').addEventListener('click',function(){manualZoom=Math.min(maxZoom,manualZoom*1.25);targetZoom=manualZoom;});
+document.getElementById('zoomOut').addEventListener('click',function(){manualZoom=Math.max(minZoom,manualZoom/1.25);targetZoom=manualZoom;});
 
 /* ═══════════════════════════════════════════════════════════
    GAME OVER / LEVEL UP
 ═══════════════════════════════════════════════════════════ */
 document.getElementById('restartBtn').addEventListener('click',function(){
   document.getElementById('gameOverScreen').classList.add('hidden');
-  level=1;score=0;startGame();
+  level=1;score=0;credits=0;startGame();
 });
 document.getElementById('nextLevelBtn').addEventListener('click',function(){
   document.getElementById('levelUpScreen').classList.add('hidden');
@@ -750,6 +966,7 @@ function doLevelUp(){
 ═══════════════════════════════════════════════════════════ */
 function startGame(){
   playerCores=0; aiCores=0;
+  if(level===1)credits=0; // reset only on fresh game
   bullets=[]; particles=[]; aiShots=[]; missiles=[];
   warpCores=[]; solarThreatAsts=[];
   ship.x=WW/2; ship.y=WH/2;
@@ -757,7 +974,10 @@ function startGame(){
   ship.alive=true;ship.shieldHp=5;ship.carrying=null;
   ship.invincible=3000;ship.trail=[];ship.respawnTimer=0;
 
-  CAM.x=ship.x;CAM.y=ship.y;CAM.zoom=0.7;targetZoom=0.7;
+  shopOpen=false;document.getElementById('shopOverlay').style.display='none';
+  upgrades={extraShield:0,heatMissiles:0,laserBlaster:0,doubleFire:0,deputies:[]};
+  laserActive=false;laserTimer=0;laserCooldown=0;missileCooldown=0;
+  CAM.x=ship.x;CAM.y=ship.y;CAM.zoom=0.7;targetZoom=0.7;manualZoom=0.7;
 
   rechargeStation.charges=5;rechargeStation.cooldownTimer=0;rechargeStation.x=WW/2;rechargeStation.y=WH/2;
 
@@ -787,6 +1007,7 @@ function startGame(){
 
 function updateHUD(){
   document.getElementById('scoreVal').textContent=score;
+  document.getElementById('creditsVal').textContent='$'+credits;
   document.getElementById('levelVal').textContent=level;
   document.getElementById('coreCount').textContent=playerCores+' / 10';
   document.getElementById('aiCoreVal').textContent=aiCores+' / 10';
@@ -833,7 +1054,8 @@ function hurtShip(){
     sfxShipExplosion();
     spawnParts(ship.x,ship.y,30,['#00d4ff','#ffffff','#88eeff'],5);
     ship.alive=false;
-    ship.respawnTimer=5000; // 5 sec player respawn
+    credits=Math.max(0,credits-100);
+    ship.respawnTimer=5000;
   } else {
     sfxExplosion(false);
     spawnParts(ship.x,ship.y,6,['#00d4ff','#88eeff'],2.5);
@@ -855,8 +1077,8 @@ function hurtAI(ai, big){
     spawnParts(ai.x,ai.y,22,[ai.color,'#ffffff'],4.5);
     ai.alive=false;
     ai.shieldHp=5;
-    ai.respawnTimer=RESPAWN_TIME;
-    score+=500;
+    ai.respawnTimer=rnd(RESPAWN_TIME_MIN,RESPAWN_TIME_MAX);
+    score+=500;credits+=50;
   } else {
     sfxExplosion(false);
     spawnParts(ai.x,ai.y,6,[ai.color,'#fff'],2.5);
@@ -904,9 +1126,45 @@ function updatePlayer(dt){
   fireCool-=dt;
   var fireNow=keys['Space']||btn.fire;
   if(fireNow&&!fireLast&&fireCool<=0&&!ship.carrying){
-    bullets.push({x:ship.x+Math.cos(ship.angle)*18,y:ship.y+Math.sin(ship.angle)*18,
-      vx:ship.vx+Math.cos(ship.angle)*8,vy:ship.vy+Math.sin(ship.angle)*8,life:65,fromPlayer:true});
+    var bx=ship.x+Math.cos(ship.angle)*18, by=ship.y+Math.sin(ship.angle)*18;
+    bullets.push({x:bx,y:by,vx:ship.vx+Math.cos(ship.angle)*8,vy:ship.vy+Math.sin(ship.angle)*8,life:65,fromPlayer:true});
+    if(upgrades.doubleFire>0){
+      // Second bullet at slight angle spread
+      var spread=0.18;
+      bullets.push({x:bx,y:by,vx:ship.vx+Math.cos(ship.angle+spread)*8,vy:ship.vy+Math.sin(ship.angle+spread)*8,life:65,fromPlayer:true});
+    }
+    // Heat missile
+    if(upgrades.heatMissiles>0&&missileCooldown<=0){
+      var nearest=null,nearD=9999999;
+      var targets=hunterAIs.concat(competitorAIs);
+      for(var mi=0;mi<targets.length;mi++){if(!targets[mi].alive)continue;var md=dst(ship.x,ship.y,targets[mi].x,targets[mi].y);if(md<nearD){nearD=md;nearest=targets[mi];}}
+      if(nearest&&nearD<600){
+        missiles.push({x:ship.x,y:ship.y,vx:ship.vx+Math.cos(ship.angle)*5,vy:ship.vy+Math.sin(ship.angle)*5,angle:ship.angle,life:5000,col:'#00ffcc',fromPlayer:true,target:nearest});
+        missileCooldown=2000;sfxFire();
+      }
+    }
     fireCool=180;sfxFire();
+  }
+  // Laser blaster — hold fire
+  if(fireNow&&upgrades.laserBlaster>0&&!laserActive&&laserCooldown<=0&&!ship.carrying){
+    laserActive=true;laserTimer=5000;
+  }
+  if(laserActive&&ship.alive){
+    // Laser damages first AI in line
+    var lx=ship.x,ly=ship.y,la=ship.angle;
+    var LASER_LEN=10*30; // 10 ship lengths (~300 units)
+    var allAI=hunterAIs.concat(competitorAIs);
+    for(var li=0;li<allAI.length;li++){
+      var lai=allAI[li];if(!lai.alive)continue;
+      // Simple line-point distance
+      var ldx=Math.cos(la),ldy=Math.sin(la);
+      var t=(( lai.x-lx)*ldx+(lai.y-ly)*ldy);
+      if(t<0||t>LASER_LEN)continue;
+      var perpX=lx+ldx*t-lai.x,perpY=ly+ldy*t-lai.y;
+      if(Math.sqrt(perpX*perpX+perpY*perpY)<20){
+        if(Math.floor(Date.now()/200)%2===0)hurtAI(lai,false); // damage every 200ms
+      }
+    }
   }
   fireLast=fireNow;
 
@@ -925,8 +1183,10 @@ function updatePlayer(dt){
   if(ship.carrying){
     for(var i=0;i<warpNexuses.length;i++){
       var nx=warpNexuses[i];if(!nx.active)continue;
+      // Only accept matching color
+      if(nx.name!==ship.carrying.name)continue;
       if(dst(ship.x,ship.y,nx.x,nx.y)<nx.r+10){
-        ship.carrying=null;playerCores++;score+=1000;
+        ship.carrying=null;playerCores++;score+=1000;credits+=100;
         sfxDeliver();spawnParts(nx.x,nx.y,25,['#00ffaa','#ffffff','#ffdd44'],4.5);
         showAlert('CORE DELIVERED! '+playerCores+'/10',2200);
         updateHUD();
@@ -938,10 +1198,14 @@ function updatePlayer(dt){
     }
   }
 
+  // Starport proximity — open shop when near
+  if(!shopOpen&&dst(ship.x,ship.y,STARPORT_POS.x,STARPORT_POS.y)<70){
+    openShop();
+  }
+
   // Shield recharge
   if(rechargeStation.charges>0&&ship.shieldHp<ship.shieldMax){
     if(dst(ship.x,ship.y,rechargeStation.x,rechargeStation.y)<rechargeStation.r+15){
-      // Slow recharge — 1 pip per second in the zone
       ship.shieldRechargeTimer=(ship.shieldRechargeTimer||0)+dt;
       if(ship.shieldRechargeTimer>=1000){
         ship.shieldHp=Math.min(ship.shieldMax,ship.shieldHp+1);
@@ -969,7 +1233,7 @@ function updateBullets(dt){
       var ast=asteroids[j];if(!ast.alive)continue;
       if(dst(b.x,b.y,ast.x,ast.y)<ast.r+4){
         bullets.splice(i,1);ast.alive=false;
-        if(b.fromPlayer)score+=ast.size===3?20:ast.size===2?50:100;
+      if(b.fromPlayer){score+=ast.size===3?20:ast.size===2?50:100;credits+=25;}
         spawnParts(ast.x,ast.y,10,ast.cols,3.2);sfxExplosion(ast.size===3);
         splitAst(ast);hitAst=true;break;
       }
@@ -1012,17 +1276,41 @@ function updateAIShots(dt){
   // Update missiles
   for(var i=missiles.length-1;i>=0;i--){
     var m=missiles[i];
-    if(!ship.alive){missiles.splice(i,1);continue;}
-    var tx=ship.x-m.x,ty=ship.y-m.y,td=Math.sqrt(tx*tx+ty*ty)||1;
-    var ta=Math.atan2(ty,tx);
-    var da=ta-m.angle;
-    while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;
-    m.angle+=da*0.055;
+    // Determine target
+    var mtx,mty;
+    if(m.fromPlayer){
+      // Home to nearest live AI
+      if(m.target&&!m.target.alive)m.target=null;
+      if(!m.target){
+        var nearD2=9999999;
+        var targets2=hunterAIs.concat(competitorAIs);
+        for(var tj=0;tj<targets2.length;tj++){if(!targets2[tj].alive)continue;var td2=dst(m.x,m.y,targets2[tj].x,targets2[tj].y);if(td2<nearD2){nearD2=td2;m.target=targets2[tj];}}
+      }
+      if(m.target){mtx=m.target.x;mty=m.target.y;}
+    } else {
+      if(!ship.alive){missiles.splice(i,1);continue;}
+      mtx=ship.x;mty=ship.y;
+    }
+    if(mtx!==undefined){
+      var ta=Math.atan2(mty-m.y,mtx-m.x);
+      var da=ta-m.angle;
+      while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;
+      m.angle+=da*0.055;
+    }
     m.vx=Math.cos(m.angle)*4.5;m.vy=Math.sin(m.angle)*4.5;
     m.x+=m.vx;m.y+=m.vy;m.life-=dt;
     if(m.life<=0||m.x<0||m.x>WW||m.y<0||m.y>WH){missiles.splice(i,1);continue;}
-    if(ship.alive&&ship.invincible<=0&&dst(m.x,m.y,ship.x,ship.y)<16){
-      missiles.splice(i,1);hurtShip();continue;
+    if(m.fromPlayer){
+      // Hit AI ships
+      var allAI2=hunterAIs.concat(competitorAIs);
+      var hitM=false;
+      for(var mj=0;mj<allAI2.length;mj++){
+        if(!allAI2[mj].alive)continue;
+        if(dst(m.x,m.y,allAI2[mj].x,allAI2[mj].y)<18){missiles.splice(i,1);hurtAI(allAI2[mj],false);hitM=true;break;}
+      }
+      if(hitM)continue;
+    } else {
+      if(ship.alive&&ship.invincible<=0&&dst(m.x,m.y,ship.x,ship.y)<16){missiles.splice(i,1);hurtShip();continue;}
     }
   }
   // AI shots
@@ -1072,10 +1360,11 @@ function updateCompetitorAI(ai,dt){
   }
 
   if(ai.state==='deliver'&&ai.carrying){
-    // Find nearest nexus
+    // Find nearest color-matched nexus
     var best=null,bestD=9999999;
     for(var i=0;i<warpNexuses.length;i++){
       var nx=warpNexuses[i];if(!nx.active)continue;
+      if(nx.name!==ai.carrying.name)continue;
       var d=dst(ai.x,ai.y,nx.x,nx.y);if(d<bestD){bestD=d;best=nx;}
     }
     if(best){targetX=best.x;targetY=best.y;}
@@ -1127,6 +1416,7 @@ function updateCompetitorAI(ai,dt){
   if(ai.carrying){
     for(var i=0;i<warpNexuses.length;i++){
       var nx=warpNexuses[i];if(!nx.active)continue;
+      if(nx.name!==ai.carrying.name)continue;
       if(dst(ai.x,ai.y,nx.x,nx.y)<nx.r+10){
         spawnParts(nx.x,nx.y,20,[ai.color,'#ffffff','#ffdd44'],4);
         ai.carrying=null;aiCores++;
@@ -1363,6 +1653,25 @@ function updateParticles(dt){
    CAMERA UPDATE
 ═══════════════════════════════════════════════════════════ */
 function updateCamera(dt){
+  // Auto-zoom: find nearest enemy within 300 units
+  if(autoZoom&&ship.alive&&gameActive){
+    var nearestEnemy=9999999;
+    var allAI=hunterAIs.concat(competitorAIs);
+    for(var i=0;i<allAI.length;i++){
+      if(!allAI[i].alive)continue;
+      var d=dst(ship.x,ship.y,allAI[i].x,allAI[i].y);
+      if(d<nearestEnemy)nearestEnemy=d;
+    }
+    var AUTO_RANGE=350;
+    if(nearestEnemy<AUTO_RANGE){
+      // Zoom in to manualZoom + 0.5, but never past maxZoom
+      var autoTarget=Math.min(maxZoom,manualZoom+0.5);
+      targetZoom+=(autoTarget-targetZoom)*0.04;
+    } else {
+      // Smoothly return to manual zoom level
+      targetZoom+=(manualZoom-targetZoom)*0.03;
+    }
+  }
   CAM.zoom+=(targetZoom-CAM.zoom)*0.08;
   var tx=ship.alive?ship.x:CAM.x;
   var ty=ship.alive?ship.y:CAM.y;
@@ -1385,6 +1694,7 @@ function update(dt){
   updateAlienBot(dt);
   updateSolarSystem(dt);
   updateRechargeStation(dt);
+  updateUpgrades(dt);
   updateAsteroids(dt);
   updateCores(dt);
   updateParticles(dt);
@@ -1487,6 +1797,28 @@ function drawWorld(){
   // Draw recharge station
   drawRechargeStation();
 
+  // Draw starport
+  drawStarport();
+
+  // Draw laser beam
+  if(laserActive&&ship.alive){
+    var lend={x:ship.x+Math.cos(ship.angle)*300,y:ship.y+Math.sin(ship.angle)*300};
+    var lg=ctx.createLinearGradient(ship.x,ship.y,lend.x,lend.y);
+    lg.addColorStop(0,'rgba(0,255,255,0.95)');lg.addColorStop(1,'rgba(0,255,255,0.1)');
+    ctx.beginPath();ctx.moveTo(ship.x,ship.y);ctx.lineTo(lend.x,lend.y);
+    ctx.strokeStyle=lg;ctx.lineWidth=4+2*Math.sin(Date.now()*0.02);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(ship.x,ship.y);ctx.lineTo(lend.x,lend.y);
+    ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=1.5;ctx.stroke();
+  }
+
+  // Draw deputies
+  for(var i=0;i<upgrades.deputies.length;i++){
+    var d=upgrades.deputies[i];if(!d.alive)continue;
+    drawShipShape(d.x,d.y,d.angle,d.color,Math.sqrt(d.vx*d.vx+d.vy*d.vy)>0.3,d.invincible,d.trail,null,false);
+    drawShieldRing(d.x,d.y,d.shieldHp,d.shieldMax,d.invincible);
+    ctx.fillStyle='#00ffcc';ctx.font='bold 9px Orbitron,monospace';ctx.textAlign='center';ctx.fillText('DEPUTY',d.x,d.y-34);
+  }
+
   // Draw warp nexuses
   for(var i=0;i<warpNexuses.length;i++) drawNexus(warpNexuses[i]);
 
@@ -1587,7 +1919,7 @@ function drawWorld(){
     if(ship.carrying){
       // Arrow to nearest nexus
       var nearest=null,nearD=9999999;
-      for(var i=0;i<warpNexuses.length;i++){var nx=warpNexuses[i];if(!nx.active)continue;var d=dst(ship.x,ship.y,nx.x,nx.y);if(d<nearD){nearD=d;nearest=nx;}}
+      for(var i=0;i<warpNexuses.length;i++){var nx=warpNexuses[i];if(!nx.active)continue;if(nx.name!==ship.carrying.name)continue;var d=dst(ship.x,ship.y,nx.x,nx.y);if(d<nearD){nearD=d;nearest=nx;}}
       if(nearest&&nearD>80){
         var ang=Math.atan2(nearest.y-ship.y,nearest.x-ship.x);
         drawArrow(ship.x,ship.y,ang,36,'#00ffaa',0.6);
@@ -1646,19 +1978,38 @@ function drawCore(c){
 function drawNexus(nx){
   if(!nx.active)return;
   var p=0.8+0.2*Math.sin(nx.pulse);nx.pulse+=0.03;
+  // Check if player is carrying the matching core — glow brighter
+  var isTarget=ship.carrying&&ship.carrying.name===nx.name;
+  var alpha=isTarget?0.9:0.55;
+  var glowAlpha=isTarget?(0.35+0.15*Math.sin(Date.now()*0.008)):0.18;
+  var col=nx.color||'#00ffb4';
+  var rgbStr=nx.rgb||'0,255,180';
   ctx.save();ctx.translate(nx.x,nx.y);
-  // Dashed ring
+  // Outer dashed ring — brighter when target
   ctx.beginPath();ctx.arc(0,0,nx.r*p+10,0,Math.PI*2);
-  ctx.strokeStyle='rgba(0,255,180,0.3)';ctx.lineWidth=2;ctx.setLineDash([8,6]);ctx.stroke();ctx.setLineDash([]);
-  // Inner
+  ctx.strokeStyle='rgba('+rgbStr+','+(isTarget?0.7:0.3)+')';
+  ctx.lineWidth=isTarget?3:2;ctx.setLineDash([8,6]);ctx.stroke();ctx.setLineDash([]);
+  // Pulsing glow
+  try{var g=ctx.createRadialGradient(0,0,0,0,0,nx.r*1.4);
+    g.addColorStop(0,'rgba('+rgbStr+','+glowAlpha+')');
+    g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath();ctx.arc(0,0,nx.r*1.4,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+  }catch(e){}
+  // Inner circle
   ctx.beginPath();ctx.arc(0,0,nx.r,0,Math.PI*2);
-  try{var g=ctx.createRadialGradient(0,0,0,0,0,nx.r);g.addColorStop(0,'rgba(0,255,180,0.18)');g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;}catch(e){ctx.fillStyle='rgba(0,255,180,0.1)';}
-  ctx.fill();ctx.strokeStyle='rgba(0,255,180,0.55)';ctx.lineWidth=2;ctx.stroke();
-  // Rotating spokes
+  ctx.strokeStyle='rgba('+rgbStr+','+alpha+')';ctx.lineWidth=2.5;ctx.stroke();
+  // Rotating spokes in nexus color
   ctx.rotate(nx.pulse*0.3);
-  for(var i=0;i<6;i++){var a=(i/6)*Math.PI*2;ctx.beginPath();ctx.moveTo(Math.cos(a)*20,Math.sin(a)*20);ctx.lineTo(Math.cos(a)*nx.r-5,Math.sin(a)*nx.r-5);ctx.strokeStyle='rgba(0,255,180,0.3)';ctx.lineWidth=1.5;ctx.stroke();}
+  for(var i=0;i<6;i++){
+    var a=(i/6)*Math.PI*2;
+    ctx.beginPath();ctx.moveTo(Math.cos(a)*20,Math.sin(a)*20);
+    ctx.lineTo(Math.cos(a)*(nx.r-5),Math.sin(a)*(nx.r-5));
+    ctx.strokeStyle='rgba('+rgbStr+',0.4)';ctx.lineWidth=1.5;ctx.stroke();
+  }
   ctx.restore();
-  ctx.fillStyle='rgba(0,255,180,0.7)';ctx.font='bold 9px Orbitron,monospace';ctx.textAlign='center';ctx.fillText('NEXUS',nx.x,nx.y+nx.r+16);
+  ctx.fillStyle='rgba('+rgbStr+','+alpha+')';
+  ctx.font='bold 9px Orbitron,monospace';ctx.textAlign='center';
+  ctx.fillText(nx.name+' NEXUS',nx.x,nx.y+nx.r+16);
 }
 
 function drawWarpSpawnZone(){
@@ -1669,6 +2020,42 @@ function drawWarpSpawnZone(){
   ctx.restore();
   ctx.fillStyle='rgba(160,60,255,0.5)';ctx.font='bold 11px Orbitron,monospace';ctx.textAlign='center';
   ctx.fillText('WARP CORE SPAWN',WARP_CORNER.x,WARP_CORNER.y+160);
+}
+
+function drawStarport(){
+  var sx=STARPORT_POS.x,sy=STARPORT_POS.y;
+  var near=ship.alive&&dst(ship.x,ship.y,sx,sy)<200;
+  var p=0.88+0.12*Math.sin(Date.now()*0.002);
+  ctx.save();ctx.translate(sx,sy);
+  // Outer glow
+  try{var g=ctx.createRadialGradient(0,0,0,0,0,90*p);g.addColorStop(0,'rgba(255,200,50,0.14)');g.addColorStop(1,'rgba(0,0,0,0)');ctx.beginPath();ctx.arc(0,0,90*p,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();}catch(e){}
+  // Docking ring
+  ctx.beginPath();ctx.arc(0,0,62,0,Math.PI*2);
+  ctx.strokeStyle=near?'rgba(255,220,50,0.7)':'rgba(255,200,50,0.3)';ctx.lineWidth=near?3:2;ctx.setLineDash([12,8]);ctx.stroke();ctx.setLineDash([]);
+  // Station body — hexagon
+  ctx.beginPath();for(var i=0;i<6;i++){var a=(i/6)*Math.PI*2;var r=28;ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);}ctx.closePath();
+  ctx.fillStyle='rgba(30,20,0,0.9)';ctx.fill();ctx.strokeStyle='rgba(255,200,50,0.7)';ctx.lineWidth=2.5;ctx.stroke();
+  // Rotating docking arm
+  ctx.rotate(Date.now()*0.0004);
+  ctx.strokeStyle='rgba(255,200,50,0.35)';ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(-40,0);ctx.lineTo(40,0);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,-40);ctx.lineTo(0,40);ctx.stroke();
+  ctx.restore();
+  // Labels
+  ctx.fillStyle=near?'rgba(255,220,50,0.9)':'rgba(255,200,50,0.45)';
+  ctx.font='bold 11px Orbitron,monospace';ctx.textAlign='center';
+  ctx.fillText('⭐ STARPORT',sx,sy-75);
+  if(near){ctx.font='bold 9px Orbitron,monospace';ctx.fillStyle='rgba(255,220,50,0.6)';ctx.fillText('FLY IN TO SHOP',sx,sy+85);}
+  // Active upgrades HUD near starport
+  var uy=sy-95;
+  var uids=['heatMissiles','laserBlaster','doubleFire','extraShield'];
+  var unames=['MISSILES','LASER','DBL FIRE','EX SHIELD'];
+  for(var i=0;i<uids.length;i++){
+    if(upgrades[uids[i]]>0){
+      ctx.fillStyle='rgba(255,220,50,0.75)';ctx.font='bold 8px Orbitron,monospace';
+      ctx.fillText(unames[i]+' '+Math.ceil(upgrades[uids[i]]/1000)+'s',sx,uy);uy-=14;
+    }
+  }
 }
 
 function drawRechargeStation(){
@@ -1785,12 +2172,15 @@ function drawMinimap(){
   // Recharge station
   var rc=mp(rechargeStation.x,rechargeStation.y);
   mx.fillStyle='rgba(0,255,180,0.5)';mx.beginPath();mx.arc(rc.x,rc.y,3,0,Math.PI*2);mx.fill();
+  // Starport
+  var sp2=mp(STARPORT_POS.x,STARPORT_POS.y);
+  mx.fillStyle='rgba(255,220,50,0.7)';mx.fillRect(sp2.x-3,sp2.y-3,6,6);
 
   // Warp cores
   for(var i=0;i<warpCores.length;i++){var c=warpCores[i];var cp=mp(c.x,c.y);mx.fillStyle=c.color;mx.beginPath();mx.arc(cp.x,cp.y,3,0,Math.PI*2);mx.fill();}
 
-  // Nexuses
-  for(var i=0;i<warpNexuses.length;i++){var nx=warpNexuses[i];if(!nx.active)continue;var np=mp(nx.x,nx.y);mx.strokeStyle='rgba(0,255,180,0.4)';mx.lineWidth=1.5;mx.beginPath();mx.arc(np.x,np.y,4,0,Math.PI*2);mx.stroke();}
+  // Nexuses — colored by their type
+  for(var i=0;i<warpNexuses.length;i++){var nx=warpNexuses[i];if(!nx.active)continue;var np=mp(nx.x,nx.y);mx.strokeStyle=nx.color||'rgba(0,255,180,0.8)';mx.lineWidth=2;mx.beginPath();mx.arc(np.x,np.y,4,0,Math.PI*2);mx.stroke();}
 
   // AI ships
   var allAI=hunterAIs.concat(competitorAIs);
