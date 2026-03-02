@@ -248,7 +248,7 @@ body{background:#000;overflow:hidden;font-family:'Orbitron','Courier New',monosp
 
 <!-- Starport Shop -->
 
-<div id="shopOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.88);z-index:60;align-items:center;justify-content:center;padding:16px;">
+<div id="shopOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.88);z-index:60;align-items:center;justify-content:center;padding:16px;" ontouchstart="event.stopPropagation()">
   <div style="background:rgba(0,8,20,0.99);border:1px solid rgba(255,200,50,0.4);border-radius:14px;padding:22px 20px;max-width:380px;width:100%;max-height:90vh;overflow-y:auto;">
     <div style="text-align:center;margin-bottom:16px;">
       <div style="font-size:11px;letter-spacing:4px;color:#ffdd44;margin-bottom:4px;">⭐ STARPORT SHOP</div>
@@ -256,7 +256,7 @@ body{background:#000;overflow:hidden;font-family:'Orbitron','Courier New',monosp
     </div>
     <div id="shopItems"></div>
     <div style="text-align:center;margin-top:14px;">
-      <button id="closeShopBtn" style="background:transparent;border:1px solid rgba(255,200,50,0.4);border-radius:6px;color:rgba(255,200,50,0.7);font-family:'Orbitron',monospace;font-size:9px;letter-spacing:2px;padding:10px 28px;cursor:pointer;">LAUNCH</button>
+      <button id="closeShopBtn" style="background:rgba(255,200,50,0.15);border:2px solid rgba(255,200,50,0.8);border-radius:8px;color:#ffdd44;font-family:'Orbitron',monospace;font-size:13px;letter-spacing:3px;padding:14px 40px;cursor:pointer;width:100%;margin-top:4px;">✕ EXIT SHOP</button>
     </div>
   </div>
 </div>
@@ -308,8 +308,8 @@ function buildStars(){
   bgStars=[];
   for(var i=0;i<600;i++) bgStars.push({
     x:Math.random()*WW, y:Math.random()*WH,
-    r:Math.random()*1.4+0.3, a:Math.random()*0.5+0.1,
-    tw:Math.random()*Math.PI*2, ts:Math.random()*0.015+0.003
+    r:Math.random()*1.8+0.5, a:Math.random()*0.4+0.5,
+    tw:Math.random()*Math.PI*2, ts:Math.random()*0.004+0.001
   });
 }
 
@@ -395,6 +395,7 @@ var score=0, level=1, gameActive=false;
 var playerCores=0, aiCores=0;
 var credits=0;
 var shopOpen=false;
+var shopCooldown=0; // ms before shop can reopen
 var upgrades={
   extraShield:0,     // timer ms remaining
   heatMissiles:0,
@@ -436,18 +437,20 @@ var ship={
    WARP CORES
 ═══════════════════════════════════════════════════════════ */
 var CORE_COLORS=[
-  {color:'#ff3333',name:'RED',  rgb:'255,51,51'},
-  {color:'#3388ff',name:'BLUE', rgb:'51,136,255'},
-  {color:'#aa44ff',name:'PURPLE',rgb:'170,68,255'},
-  {color:'#44ff88',name:'GREEN',rgb:'68,255,136'}
+  {color:'#ff3333',name:'RED',    rgb:'255,51,51'},
+  {color:'#3388ff',name:'BLUE',   rgb:'51,136,255'},
+  {color:'#aa44ff',name:'PURPLE', rgb:'170,68,255'},
+  {color:'#44ff88',name:'GREEN',  rgb:'68,255,136'},
+  {color:'#ff8800',name:'ORANGE', rgb:'255,136,0'},
+  {color:'#ffee00',name:'YELLOW', rgb:'255,238,0'}
 ];
 var warpCores=[];   // cores waiting to be picked up (in the spawn corner)
 var warpNexuses=[]; // delivery points scattered around map
-var MAX_CORES_SPAWNED=4;
+var MAX_CORES_SPAWNED=6;
 
 function spawnCore(){
   if(warpCores.length>=MAX_CORES_SPAWNED) return;
-  var cd=CORE_COLORS[rndI(0,3)];
+  var cd=CORE_COLORS[rndI(0,CORE_COLORS.length-1)];
   warpCores.push({
     x:WARP_CORNER.x+rnd(-80,80),
     y:WARP_CORNER.y+rnd(-80,80),
@@ -459,10 +462,11 @@ function spawnCore(){
 function spawnNexuses(){
   warpNexuses=[];
   var positions=[
-    {x:WW*0.32,y:WH*0.18},{x:WW*0.68,y:WH*0.15},
-    {x:WW*0.18,y:WH*0.48},{x:WW*0.82,y:WH*0.52},
-    {x:WW*0.38,y:WH*0.76},{x:WW*0.65,y:WH*0.70},
-    {x:WW*0.50,y:WH*0.30},{x:WW*0.55,y:WH*0.62}
+    {x:WW*0.30,y:WH*0.16},{x:WW*0.70,y:WH*0.14},
+    {x:WW*0.15,y:WH*0.45},{x:WW*0.84,y:WH*0.50},
+    {x:WW*0.36,y:WH*0.74},{x:WW*0.66,y:WH*0.68},
+    {x:WW*0.50,y:WH*0.28},{x:WW*0.52,y:WH*0.58},
+    {x:WW*0.22,y:WH*0.72},{x:WW*0.78,y:WH*0.26}
   ];
   // Fisher-Yates shuffle
   for(var i=positions.length-1;i>0;i--){var j=rndI(0,i);var t=positions[i];positions[i]=positions[j];positions[j]=t;}
@@ -497,37 +501,61 @@ var missileCooldown=0;
 function openShop(){
   if(shopOpen)return;
   shopOpen=true;
+  gameActive=false; // pause game while shopping
   document.getElementById('shopOverlay').style.display='flex';
   renderShopItems();
 }
 function closeShop(){
   shopOpen=false;
+  shopCooldown=3000; // 3 seconds before shop can reopen
+  gameActive=true;
   document.getElementById('shopOverlay').style.display='none';
 }
-document.getElementById('closeShopBtn').addEventListener('click',closeShop);
+var closeShopBtn=document.getElementById('closeShopBtn');
+closeShopBtn.addEventListener('click',function(e){e.stopPropagation();closeShop();});
+closeShopBtn.addEventListener('touchend',function(e){e.preventDefault();e.stopPropagation();closeShop();},{passive:false});
 
 function renderShopItems(){
   document.getElementById('shopCredits').textContent='$'+credits;
-  var html='';
+  var container=document.getElementById('shopItems');
+  container.innerHTML='';
   SHOP_ITEMS.forEach(function(item){
     var active='';
     var canBuy=credits>=item.cost;
     if(item.id==='deputy'){
-      active=upgrades.deputies.filter(function(d){return d.alive;}).length+'/2 active';
-      canBuy=canBuy&&upgrades.deputies.filter(function(d){return d.alive;}).length<2;
+      var numDep=upgrades.deputies.filter(function(d){return d.alive;}).length;
+      active=numDep+'/2 active';
+      canBuy=canBuy&&numDep<2;
     } else if(upgrades[item.id]>0){
       active=Math.ceil(upgrades[item.id]/1000)+'s left';
     }
-    html+='<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,200,50,0.1);">';
-    html+='<span style="font-size:20px;">'+item.icon+'</span>';
-    html+='<div style="flex:1;">';
-    html+='<div style="font-size:10px;letter-spacing:2px;color:#ffdd44;font-family:Orbitron,monospace;">'+item.name+'</div>';
-    html+='<div style="font-size:9px;color:rgba(255,255,255,0.5);">'+item.desc+(active?' — <span style="color:#00ffaa;">'+active+'</span>':'')+'</div>';
-    html+='</div>';
-    html+='<button onclick="buyItem(\''+item.id+'\')" style="background:'+(canBuy?'rgba(255,200,50,0.15)':'rgba(60,60,60,0.3)')+';border:1px solid '+(canBuy?'rgba(255,200,50,0.5)':'rgba(100,100,100,0.3)')+';border-radius:5px;color:'+(canBuy?'#ffdd44':'rgba(100,100,100,0.5)')+';font-family:Orbitron,monospace;font-size:9px;padding:6px 10px;cursor:'+(canBuy?'pointer':'default')+';">$'+item.cost+'</button>';
-    html+='</div>';
+    var row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,200,50,0.1);';
+    var icon=document.createElement('span');
+    icon.style.fontSize='20px';icon.textContent=item.icon;
+    var info=document.createElement('div');
+    info.style.flex='1';
+    var title=document.createElement('div');
+    title.style.cssText='font-size:10px;letter-spacing:2px;color:#ffdd44;font-family:Orbitron,monospace;';
+    title.textContent=item.name;
+    var desc=document.createElement('div');
+    desc.style.cssText='font-size:9px;color:rgba(255,255,255,0.5);';
+    desc.textContent=item.desc+(active?' — '+active:'');
+    info.appendChild(title);info.appendChild(desc);
+    var btn=document.createElement('button');
+    btn.textContent='$'+item.cost;
+    btn.style.cssText='background:'+(canBuy?'rgba(255,200,50,0.15)':'rgba(60,60,60,0.3)')+
+      ';border:1px solid '+(canBuy?'rgba(255,200,50,0.5)':'rgba(100,100,100,0.3)')+
+      ';border-radius:5px;color:'+(canBuy?'#ffdd44':'rgba(100,100,100,0.5)')+
+      ';font-family:Orbitron,monospace;font-size:9px;padding:6px 10px;cursor:'+(canBuy?'pointer':'default')+
+      ';-webkit-tap-highlight-color:transparent;';
+    btn.disabled=!canBuy;
+    if(canBuy){
+      btn.addEventListener('click',(function(id){return function(e){e.stopPropagation();buyItem(id);};})(item.id));
+    }
+    row.appendChild(icon);row.appendChild(info);row.appendChild(btn);
+    container.appendChild(row);
   });
-  document.getElementById('shopItems').innerHTML=html;
 }
 
 function buyItem(id){
@@ -546,7 +574,7 @@ function buyItem(id){
     upgrades[id]=upgrades[id]>0?upgrades[id]+UPGRADE_DURATION:UPGRADE_DURATION; // stack duration
   }
   sfxPickup();
-  renderShopItems();
+  closeShop();
   updateHUD();
 }
 
@@ -558,7 +586,6 @@ function makeDeputyAI(){
     fireTimer:rnd(1500,2500),color:'#00ffcc',name:'DEPUTY'
   };
 }
-window.buyItem=buyItem;
 
 function updateDeputies(dt){
   for(var i=upgrades.deputies.length-1;i>=0;i--){
@@ -709,6 +736,55 @@ var alienBot={
 };
 
 /* ═══════════════════════════════════════════════════════════
+   BLACK HOLE
+═══════════════════════════════════════════════════════════ */
+var BLACK_HOLE_START={x:WW/2, y:WH-400};
+var blackHole={
+  x:WW/2, y:WH-400,
+  r:28, pulse:0,
+  towedBy:null,    // 'ai' | 'player' | null
+  towAI:null,      // the AI ship object towing it
+  speed:0.0011,    // world units per frame — extremely slow crawl
+  distToSolar:0,
+  warnShown:false
+};
+
+function initBlackHole(){
+  // Fixed Y = midpoint between starport and solar corner
+  var fixedY=Math.round((STARPORT_POS.y+SOLAR_CORNER.y)/2);
+  BLACK_HOLE_START.x=WW/2;
+  BLACK_HOLE_START.y=fixedY;
+  blackHole.x=BLACK_HOLE_START.x;
+  blackHole.y=fixedY;
+  blackHole.fixedY=fixedY; // lock Y axis
+  blackHole.towedBy=null;
+  blackHole.warnShown=false;
+  // Create dedicated tow AI
+  blackHole.towAI={
+    x:blackHole.x+80,y:blackHole.y-60,
+    vx:0,vy:0,angle:0,trail:[],
+    shieldHp:4,shieldMax:4,alive:true,invincible:0,
+    color:'#cc44ff',name:'TOW SHIP',
+    respawnTimer:0,fireTimer:rnd(3000,5000),
+    isTowShip:true
+  };
+  blackHole.towedBy='ai';
+}
+
+function resetBlackHole(){
+  var bh=blackHole;
+  var fy=bh.fixedY||BLACK_HOLE_START.y;
+  bh.x=BLACK_HOLE_START.x;bh.y=fy;bh.fixedY=fy;
+  bh.towedBy=null;bh.warnShown=false;bh.deputyTower=null;
+  var ta=bh.towAI;
+  ta.x=bh.x+80;ta.y=fy;
+  ta.alive=true;ta.shieldHp=4;ta.vx=0;ta.vy=0;ta.trail=[];
+  setTimeout(function(){
+    if(gameActive){bh.towedBy='ai';showAlert('⚫ NEW TOW SHIP INCOMING!',2500);}
+  },10000);
+}
+
+/* ═══════════════════════════════════════════════════════════
    AI SHIPS
 ═══════════════════════════════════════════════════════════ */
 // Competitor AI ships (race for warp cores)
@@ -771,37 +847,51 @@ var RESPAWN_TIME_MIN=20000, RESPAWN_TIME_MAX=40000;
 function initJoystick(){
   var wrap=document.getElementById('joystickWrap');
   var thumb=document.getElementById('joystickThumb');
-  var active=false,ox=0,oy=0;
+  var joyId=-1, ox=0, oy=0;
   function getCenter(){var r=wrap.getBoundingClientRect();ox=r.left+r.width/2;oy=r.top+r.height/2;}
-  function start(e){e.preventDefault();getCenter();active=true;thumb.classList.add('active');move(e);}
-  function move(e){
-    if(!active)return;e.preventDefault();
-    var cx,cy;
-    if(e.touches){cx=e.touches[0].clientX;cy=e.touches[0].clientY;}
-    else{cx=e.clientX;cy=e.clientY;}
-    var dx=cx-ox,dy=cy-oy,d=Math.sqrt(dx*dx+dy*dy);
-    if(d>60){dx=dx/d*60;dy=dy/d*60;}
-    var nx=dx/60;
-    btn.left=(nx<-0.15);btn.right=(nx>0.15);
+  function applyTouch(t){
+    var dx=t.clientX-ox, dy=t.clientY-oy;
+    var d=Math.sqrt(dx*dx+dy*dy);
+    if(d>56){dx=dx/d*56;dy=dy/d*56;}
+    btn.left=(dx<-10);btn.right=(dx>10);
     thumb.style.left=(52+dx-8)+'px';thumb.style.top=(20+dy-8)+'px';
   }
-  function end(e){e.preventDefault();active=false;btn.left=false;btn.right=false;thumb.classList.remove('active');thumb.style.left='52px';thumb.style.top='20px';}
-  wrap.addEventListener('pointerdown',start,{passive:false});
-  wrap.addEventListener('pointermove',move,{passive:false});
-  wrap.addEventListener('pointerup',end,{passive:false});
-  wrap.addEventListener('pointercancel',end,{passive:false});
+  function reset(){
+    joyId=-1;btn.left=false;btn.right=false;
+    thumb.classList.remove('active');thumb.style.left='52px';thumb.style.top='20px';
+  }
+  wrap.addEventListener('touchstart',function(e){
+    e.preventDefault();e.stopPropagation();
+    if(joyId===-1){
+      joyId=e.changedTouches[0].identifier;
+      getCenter();thumb.classList.add('active');
+      applyTouch(e.changedTouches[0]);
+    }
+  },{passive:false});
+  wrap.addEventListener('touchmove',function(e){
+    e.preventDefault();e.stopPropagation();
+    for(var i=0;i<e.changedTouches.length;i++){
+      if(e.changedTouches[i].identifier===joyId){applyTouch(e.changedTouches[i]);return;}
+    }
+  },{passive:false});
+  wrap.addEventListener('touchend',function(e){
+    e.preventDefault();e.stopPropagation();
+    for(var i=0;i<e.changedTouches.length;i++){if(e.changedTouches[i].identifier===joyId){reset();return;}}
+  },{passive:false});
+  wrap.addEventListener('touchcancel',function(e){e.preventDefault();reset();},{passive:false});
 }
 
 function bindBtn(id,k){
   var el=document.getElementById(id);if(!el)return;
-  function dn(e){e.preventDefault();btn[k]=true;el.classList.add('pressed');}
-  function up(e){e.preventDefault();btn[k]=false;el.classList.remove('pressed');}
-  el.addEventListener('pointerdown',dn,{passive:false});
-  el.addEventListener('pointerup',up,{passive:false});
-  el.addEventListener('pointerleave',up,{passive:false});
+  function dn(e){e.preventDefault();e.stopPropagation();btn[k]=true;el.classList.add('pressed');}
+  function up(e){e.preventDefault();e.stopPropagation();btn[k]=false;el.classList.remove('pressed');}
   el.addEventListener('touchstart',dn,{passive:false});
   el.addEventListener('touchend',up,{passive:false});
   el.addEventListener('touchcancel',up,{passive:false});
+  // Keep mouse support for desktop
+  el.addEventListener('mousedown',dn);
+  el.addEventListener('mouseup',up);
+  el.addEventListener('mouseleave',up);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -974,7 +1064,7 @@ function startGame(){
   ship.alive=true;ship.shieldHp=5;ship.carrying=null;
   ship.invincible=3000;ship.trail=[];ship.respawnTimer=0;
 
-  shopOpen=false;document.getElementById('shopOverlay').style.display='none';
+  shopOpen=false;shopCooldown=0;document.getElementById('shopOverlay').style.display='none';
   upgrades={extraShield:0,heatMissiles:0,laserBlaster:0,doubleFire:0,deputies:[]};
   laserActive=false;laserTimer=0;laserCooldown=0;missileCooldown=0;
   CAM.x=ship.x;CAM.y=ship.y;CAM.zoom=0.7;targetZoom=0.7;manualZoom=0.7;
@@ -987,6 +1077,7 @@ function startGame(){
   spawnAsteroids();
   initSolarSystem();
   spawnNexuses();
+  initBlackHole();
 
   // Spawn cores
   for(var i=0;i<4;i++) spawnCore();
@@ -1056,6 +1147,8 @@ function hurtShip(){
     ship.alive=false;
     credits=Math.max(0,credits-100);
     ship.respawnTimer=5000;
+    // Drop black hole harness on death
+    if(blackHole.towedBy==='player'){blackHole.towedBy=null;showAlert('HARNESS LOST — BLACK HOLE DRIFTING',2500);}
   } else {
     sfxExplosion(false);
     spawnParts(ship.x,ship.y,6,['#00d4ff','#88eeff'],2.5);
@@ -1198,8 +1291,20 @@ function updatePlayer(dt){
     }
   }
 
+  // Black hole delivery check FIRST — before shop opens
+  if(blackHole.towedBy==='player'&&dst(blackHole.x,blackHole.y,STARPORT_POS.x,STARPORT_POS.y)<90){
+    spawnParts(blackHole.x,blackHole.y,50,['#aa00ff','#ffdd44','#ffffff','#6600cc'],7);
+    sfxDeliver();sfxShipExplosion();
+    credits+=1000;score+=5000;
+    blackHole.towedBy=null;
+    showAlert('⭐ BLACK HOLE SOLD! +$1000 CREDITS!',5000);
+    resetBlackHole();
+    updateHUD();
+  }
+
   // Starport proximity — open shop when near
-  if(!shopOpen&&dst(ship.x,ship.y,STARPORT_POS.x,STARPORT_POS.y)<70){
+  if(shopCooldown>0)shopCooldown-=dt;
+  if(!shopOpen&&shopCooldown<=0&&dst(ship.x,ship.y,STARPORT_POS.x,STARPORT_POS.y)<70){
     openShop();
   }
 
@@ -1532,6 +1637,185 @@ function updateHunterAI(ai,dt){
 /* ═══════════════════════════════════════════════════════════
    UPDATE ALIEN BOT
 ═══════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   UPDATE BLACK HOLE
+═══════════════════════════════════════════════════════════ */
+function updateBlackHole(dt){
+  var bh=blackHole;
+  bh.pulse+=dt*0.003;
+
+  var ta=blackHole.towAI;
+
+  // --- TOW AI update ---
+  if(ta.alive){
+    if(ta.invincible>0)ta.invincible-=dt;
+
+    if(bh.towedBy==='ai'){
+      // Move toward solar system, dragging black hole
+      var tx=SOLAR_CORNER.x, ty=SOLAR_CORNER.y;
+      var tdx=tx-ta.x, tdy=ty-ta.y, td=Math.sqrt(tdx*tdx+tdy*tdy)||1;
+      ta.angle=Math.atan2(tdy,tdx);
+      // Only move horizontally — Y locked to fixed path
+      ta.vx+=(tdx/td)*0.10;
+      ta.vx*=0.88; ta.vy=0;
+      var maxspd=bh.speed*16;
+      if(Math.abs(ta.vx)>maxspd)ta.vx=Math.sign(ta.vx)*maxspd;
+      ta.x+=ta.vx*(dt/16);
+      ta.y=bh.fixedY||bh.y; // locked Y
+      ta.angle=ta.vx>=0?0:Math.PI;
+      // Black hole follows directly behind tow AI horizontally
+      bh.x=ta.x-(ta.vx>=0?60:-60);
+      bh.y=ta.y;
+      ta.trail.push({x:ta.x,y:ta.y});
+      if(ta.trail.length>16)ta.trail.shift();
+
+      // Tow AI fires at player if in range
+      ta.fireTimer-=dt;
+      if(ta.fireTimer<=0&&ship.alive){
+        ta.fireTimer=rnd(2500,4000);
+        var fdx=ship.x-ta.x,fdy=ship.y-ta.y,fd=Math.sqrt(fdx*fdx+fdy*fdy)||1;
+        if(fd<500){
+          aiShots.push({x:ta.x,y:ta.y,vx:(fdx/fd)*4,vy:(fdy/fd)*4,life:3500,isBomb:false,col:'#cc44ff'});
+          sfxFire();
+        }
+      }
+    } else {
+      // Tow AI drifts and respawns to try to reclaim harness
+      ta.vx*=0.95;ta.vy*=0.95;
+      ta.x+=ta.vx*(dt/16);ta.y+=ta.vy*(dt/16);
+      // Try to grab harness back if player released
+      if(bh.towedBy===null&&dst(ta.x,ta.y,bh.x,bh.y)<80){
+        bh.towedBy='ai';
+        showAlert('TOW SHIP RECLAIMED THE HARNESS!',2500);
+      }
+    }
+
+    // Player can shoot tow AI
+    for(var i=bullets.length-1;i>=0;i--){
+      var b=bullets[i];
+      if(!b.fromPlayer)continue;
+      if(dst(b.x,b.y,ta.x,ta.y)<18){
+        bullets.splice(i,1);
+        ta.shieldHp--;
+        ta.invincible=600;
+        spawnParts(ta.x,ta.y,8,['#cc44ff','#ffffff'],3);
+        sfxExplosion(false);
+        if(ta.shieldHp<=0){
+          sfxShipExplosion();
+          spawnParts(ta.x,ta.y,20,['#cc44ff','#aa00ff','#ffffff'],4.5);
+          ta.alive=false;
+          ta.shieldHp=4;
+          ta.respawnTimer=rnd(RESPAWN_TIME_MIN,RESPAWN_TIME_MAX);
+          if(bh.towedBy==='ai'){
+            bh.towedBy=null; // harness released — black hole drifts
+            showAlert('TOW SHIP DESTROYED — GRAB THE HARNESS!',3500);
+          }
+          score+=300;credits+=50;
+        }
+        break;
+      }
+    }
+
+    // Player too close to black hole = pulled in and hurt
+    if(ship.alive&&dst(ship.x,ship.y,bh.x,bh.y)<bh.r+10){
+      hurtShip();
+    }
+
+  } else {
+    // Tow AI respawning
+    ta.respawnTimer-=dt;
+    if(ta.respawnTimer<=0){
+      ta.x=bh.x+80;ta.y=bh.y-60;
+      ta.vx=0;ta.vy=0;ta.alive=true;ta.shieldHp=4;ta.trail=[];ta.fireTimer=rnd(2000,3500);
+      if(bh.towedBy===null){
+        bh.towedBy='ai';
+        showAlert('TOW SHIP RETURNED!',2000);
+      }
+    }
+  }
+
+  // --- PLAYER TOWING ---
+  if(bh.towedBy==='player'&&ship.alive){
+    // Black hole follows player at a distance
+    // Only move horizontally — Y stays locked on fixed path
+    var pdx=ship.x-bh.x;
+    var towLen=70;
+    if(Math.abs(pdx)>towLen+10){
+      bh.x+=Math.sign(pdx)*(Math.abs(pdx)-towLen)*0.12;
+    }
+    bh.y=bh.fixedY||bh.y; // Y always locked
+    // Press fire to release harness and start shooting
+    if((keys['Space']||btn.fire)&&!fireLast){
+      bh.towedBy=null;
+      showAlert('HARNESS RELEASED — FIRING!',1500);
+    }
+  }
+
+  // --- DEPUTY AUTO-TOW ---
+  if(bh.towedBy===null||bh.towedBy==='deputy'){
+    var freeDeputy=null;
+    for(var di=0;di<upgrades.deputies.length;di++){
+      if(upgrades.deputies[di].alive){freeDeputy=upgrades.deputies[di];break;}
+    }
+    if(freeDeputy){
+      if(bh.towedBy===null&&dst(freeDeputy.x,freeDeputy.y,bh.x,bh.y)<90){
+        bh.towedBy='deputy';
+        bh.deputyTower=freeDeputy;
+        showAlert('DEPUTY LOCKED ONTO BLACK HOLE HARNESS!',2500);
+      }
+      if(bh.towedBy==='deputy'&&bh.deputyTower&&bh.deputyTower.alive){
+        // Deputy steers black hole toward starport
+        var dep=bh.deputyTower;
+        var dtx=STARPORT_POS.x-dep.x,dty=STARPORT_POS.y-dep.y,dtd=Math.sqrt(dtx*dtx+dty*dty)||1;
+        // Horizontal only
+        dep.vx+=(dtx/dtd)*0.10;dep.vy=0;
+        dep.vx*=0.88;
+        if(Math.abs(dep.vx)>bh.speed*16)dep.vx=Math.sign(dep.vx)*bh.speed*16;
+        dep.x+=dep.vx*(dt/16);
+        dep.y=bh.fixedY||bh.y;
+        dep.angle=dep.vx>=0?0:Math.PI;
+        bh.x=dep.x-(dep.vx>=0?70:-70);
+        bh.y=dep.y;
+        // Delivered to starport?
+        if(dst(bh.x,bh.y,STARPORT_POS.x,STARPORT_POS.y)<90){
+          spawnParts(bh.x,bh.y,50,['#aa00ff','#ffdd44','#ffffff'],7);
+          sfxDeliver();sfxShipExplosion();
+          credits+=1000;score+=5000;
+          showAlert('⭐ DEPUTY DELIVERED BLACK HOLE! +$1000!',5000);
+          bh.towedBy=null;bh.deputyTower=null;
+          resetBlackHole();
+        }
+      } else if(bh.towedBy==='deputy'&&(!bh.deputyTower||!bh.deputyTower.alive)){
+        bh.towedBy=null;bh.deputyTower=null;
+      }
+    }
+  }
+
+  // --- FREE DRIFT — stays perfectly still until grabbed ---
+  if(bh.towedBy===null){
+    // Player can grab harness by flying close
+    if(ship.alive&&dst(ship.x,ship.y,bh.x,bh.y)<bh.r+50){
+      bh.towedBy='player';
+      showAlert('HARNESS LOCKED — TOW TO STARPORT! FIRE TO RELEASE',3000);
+    }
+  }
+
+  // --- PROXIMITY WARNING ---
+  var distToSolar=Math.abs(bh.x-SOLAR_CORNER.x);
+  if(distToSolar<800&&!bh.warnShown){
+    bh.warnShown=true;
+    showAlert('⚠ BLACK HOLE APPROACHING SOLAR SYSTEM!',4000);
+  }
+  if(distToSolar>800)bh.warnShown=false;
+
+  // --- GAME OVER if black hole reaches solar system ---
+  if(Math.abs(bh.x-SOLAR_CORNER.x)<SUN_R+bh.r+20){
+    showAlert('☠ BLACK HOLE CONSUMED THE SOLAR SYSTEM',1000);
+    setTimeout(doGameOver,1500);
+    gameActive=false;
+  }
+}
+
 function updateAlienBot(dt){
   if(!alienBot.alive)return;
   alienBot.pulse+=dt*0.002;
@@ -1554,7 +1838,7 @@ function updateAlienBot(dt){
     }
   } else {
     alienBot.beamTimer+=dt;
-    if(alienBot.beamTimer>=rnd(7000,12000)){
+    if(alienBot.beamTimer>=rnd(90000,120000)){
       alienBot.beamTimer=0;alienBot.beamActive=true;alienBot.beamCooldown=2500;
     }
   }
@@ -1692,6 +1976,7 @@ function update(dt){
   for(var i=0;i<competitorAIs.length;i++) updateCompetitorAI(competitorAIs[i],dt);
   for(var i=0;i<hunterAIs.length;i++) updateHunterAI(hunterAIs[i],dt);
   updateAlienBot(dt);
+  updateBlackHole(dt);
   updateSolarSystem(dt);
   updateRechargeStation(dt);
   updateUpgrades(dt);
@@ -1758,13 +2043,14 @@ function drawShieldRing(x,y,hp,maxHp,invincible){
    DRAW WORLD
 ═══════════════════════════════════════════════════════════ */
 function drawWorld(){
-  // Stars
+  // Stars — screen space with gentle parallax (0.12x camera drift)
   for(var i=0;i<bgStars.length;i++){
     var s=bgStars[i];s.tw+=s.ts;
-    if(!inView(s.x,s.y,5))continue;
-    var sp=worldToScreen(s.x,s.y);
-    ctx.beginPath();ctx.arc(sp.x,sp.y,s.r*CAM.zoom,0,Math.PI*2);
-    ctx.fillStyle='rgba(255,255,255,'+(s.a*(0.6+0.4*Math.sin(s.tw)))+')';ctx.fill();
+    // Gentle parallax: stars shift slightly with camera but mostly fixed on screen
+    var sx=((s.x-CAM.x*0.12+WW*2)%VW+VW)%VW;
+    var sy=((s.y-CAM.y*0.12+WH*2)%VH+VH)%VH;
+    ctx.beginPath();ctx.arc(sx,sy,s.r,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,'+(s.a*(0.7+0.3*Math.sin(s.tw)))+')';ctx.fill();
   }
 
   applyCamera();
@@ -1833,6 +2119,9 @@ function drawWorld(){
 
   // Draw alien bot
   drawAlienBot();
+
+  // Draw black hole
+  drawBlackHole();
 
   // Draw asteroids
   for(var i=0;i<asteroids.length;i++) if(asteroids[i].alive) drawAst(asteroids[i]);
@@ -2150,6 +2439,104 @@ function drawAlienBot(){
 }
 
 /* ═══════════════════════════════════════════════════════════
+   BLACK HOLE DRAW
+═══════════════════════════════════════════════════════════ */
+function drawBlackHole(){
+  var bh=blackHole;
+  var ta=bh.towAI;
+  var now=Date.now();
+
+  // Draw tow AI ship (if alive)
+  if(ta.alive){
+    drawShipShape(ta.x,ta.y,ta.angle,ta.color,true,ta.invincible,ta.trail,null,false);
+    drawShieldRing(ta.x,ta.y,ta.shieldHp,ta.shieldMax,ta.invincible);
+    ctx.fillStyle=ta.color;ctx.font='bold 10px Orbitron,monospace';ctx.textAlign='center';
+    ctx.fillText('TOW SHIP',ta.x,ta.y-36);
+    // Tow cable to black hole
+    if(bh.towedBy==='ai'){
+      ctx.beginPath();ctx.moveTo(ta.x,ta.y);ctx.lineTo(bh.x,bh.y);
+      ctx.strokeStyle='rgba(180,80,255,0.6)';ctx.lineWidth=2;ctx.setLineDash([6,5]);ctx.stroke();ctx.setLineDash([]);
+    }
+  } else if(ta.respawnTimer>0){
+    // Show respawn countdown near black hole
+    ctx.fillStyle='rgba(180,80,255,0.5)';ctx.font='bold 9px Orbitron,monospace';ctx.textAlign='center';
+    ctx.fillText('TOW SHIP '+Math.ceil(ta.respawnTimer/1000)+'s',bh.x,bh.y-bh.r-30);
+  }
+
+  // Player tow cable
+  if(bh.towedBy==='player'&&ship.alive){
+    ctx.beginPath();ctx.moveTo(ship.x,ship.y);ctx.lineTo(bh.x,bh.y);
+    ctx.strokeStyle='rgba(0,220,255,0.7)';ctx.lineWidth=2.5;ctx.setLineDash([8,5]);ctx.stroke();ctx.setLineDash([]);
+    // Arrow pointing to starport
+    if(dst(ship.x,ship.y,STARPORT_POS.x,STARPORT_POS.y)>120){
+      drawArrow(ship.x,ship.y,Math.atan2(STARPORT_POS.y-ship.y,STARPORT_POS.x-ship.x),44,'#ffdd44',0.8);
+    }
+  }
+  // Deputy tow cable
+  if(bh.towedBy==='deputy'&&bh.deputyTower&&bh.deputyTower.alive){
+    var dep=bh.deputyTower;
+    ctx.beginPath();ctx.moveTo(dep.x,dep.y);ctx.lineTo(bh.x,bh.y);
+    ctx.strokeStyle='rgba(0,255,200,0.7)';ctx.lineWidth=2;ctx.setLineDash([6,5]);ctx.stroke();ctx.setLineDash([]);
+  }
+
+  // Black hole — gravitational lens rings
+  ctx.save();ctx.translate(bh.x,bh.y);
+  var rot=now*0.0008;
+  // Event horizon
+  try{
+    var g=ctx.createRadialGradient(0,0,0,0,0,bh.r*1.8);
+    g.addColorStop(0,'rgba(0,0,0,1)');
+    g.addColorStop(0.55,'rgba(30,0,60,0.95)');
+    g.addColorStop(0.75,'rgba(120,0,200,0.7)');
+    g.addColorStop(0.88,'rgba(200,100,255,0.4)');
+    g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath();ctx.arc(0,0,bh.r*1.8,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+  }catch(e){}
+  // Accretion disk — rotating ellipse
+  for(var ring=0;ring<3;ring++){
+    ctx.save();
+    ctx.rotate(rot*(1+ring*0.3));
+    ctx.scale(1,0.28+ring*0.08);
+    ctx.beginPath();ctx.arc(0,0,bh.r+10+ring*10,0,Math.PI*2);
+    ctx.strokeStyle='hsl('+(280+ring*30)+','+'100%,'+( 55+ring*10)+'%,'+( 0.35-ring*0.08)+')';
+    var hue=280+ring*30;
+    ctx.strokeStyle='hsla('+hue+',100%,'+(55+ring*10)+'%,'+(0.5-ring*0.1)+')';
+    ctx.lineWidth=3-ring*0.5;ctx.stroke();
+    ctx.restore();
+  }
+  // Core
+  ctx.beginPath();ctx.arc(0,0,bh.r*0.6,0,Math.PI*2);ctx.fillStyle='rgba(0,0,0,1)';ctx.fill();
+  ctx.strokeStyle='rgba(160,0,255,0.8)';ctx.lineWidth=2;ctx.stroke();
+
+  // Harness pickup ring (pulse when free)
+  if(bh.towedBy===null){
+    var pulse=0.6+0.4*Math.sin(now*0.006);
+    ctx.beginPath();ctx.arc(0,0,bh.r+50,0,Math.PI*2);
+    ctx.strokeStyle='rgba(0,220,255,'+pulse+')';ctx.lineWidth=2;ctx.setLineDash([10,8]);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='rgba(0,220,255,0.7)';ctx.font='bold 9px Orbitron,monospace';ctx.textAlign='center';
+    ctx.fillText('TOW TO STARPORT',0,bh.r+68);
+  }
+  ctx.restore();
+
+  // Distance warning bar — progress toward solar system
+  var totalDist=Math.abs(SOLAR_CORNER.x-BLACK_HOLE_START.x)||1;
+  var curDist=Math.abs(bh.x-SOLAR_CORNER.x);
+  var pct=Math.max(0,Math.min(1,1-curDist/totalDist));
+  if(pct>0.15){
+    // Draw HUD warning bar on screen (not world space)
+    var barW=140,barH=7,barX=VW/2-barW/2,barY=70;
+    ctx.save();ctx.resetTransform();
+    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(barX-2,barY-2,barW+4,barH+4);
+    ctx.fillStyle='rgba(180,0,255,0.2)';ctx.fillRect(barX,barY,barW,barH);
+    var dangerColor=pct>0.7?'#ff2200':pct>0.4?'#ff8800':'#aa44ff';
+    ctx.fillStyle=dangerColor;ctx.fillRect(barX,barY,barW*pct,barH);
+    ctx.fillStyle='rgba(200,150,255,0.7)';ctx.font='bold 8px Orbitron,monospace';ctx.textAlign='center';
+    ctx.fillText('⚫ BLACK HOLE '+(Math.round(pct*100))+'%',VW/2,barY-5);
+    ctx.restore();
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
    MINIMAP
 ═══════════════════════════════════════════════════════════ */
 function drawMinimap(){
@@ -2175,6 +2562,10 @@ function drawMinimap(){
   // Starport
   var sp2=mp(STARPORT_POS.x,STARPORT_POS.y);
   mx.fillStyle='rgba(255,220,50,0.7)';mx.fillRect(sp2.x-3,sp2.y-3,6,6);
+  // Black hole
+  var bhp=mp(blackHole.x,blackHole.y);
+  mx.beginPath();mx.arc(bhp.x,bhp.y,4,0,Math.PI*2);mx.fillStyle='rgba(160,0,255,0.85)';mx.fill();
+  mx.beginPath();mx.arc(bhp.x,bhp.y,2,0,Math.PI*2);mx.fillStyle='rgba(0,0,0,1)';mx.fill();
 
   // Warp cores
   for(var i=0;i<warpCores.length;i++){var c=warpCores[i];var cp=mp(c.x,c.y);mx.fillStyle=c.color;mx.beginPath();mx.arc(cp.x,cp.y,3,0,Math.PI*2);mx.fill();}
