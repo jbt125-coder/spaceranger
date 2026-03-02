@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>WARP ZONE</title>
+<title>SPACE RANGERS</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://www.youtube.com/iframe_api"></script>
 <style>
@@ -193,7 +193,7 @@ body{background:#000;overflow:hidden;font-family:'Orbitron','Courier New',monosp
 
 <div id="audioPermModal">
   <div id="audioPermCard">
-    <h2>🔊 WARP ZONE</h2>
+    <h2>🔊 SPACE RANGERS</h2>
     <p>Enable audio for music and sound effects.</p>
     <p class="hint">Toggle anytime via ⚙ menu</p>
     <div class="permBtns">
@@ -261,11 +261,13 @@ body{background:#000;overflow:hidden;font-family:'Orbitron','Courier New',monosp
   </div>
 </div>
 <div class="screen hidden" id="gameOverScreen">
+  <div style="font-family:'Orbitron',monospace;font-size:clamp(28px,7vw,52px);font-weight:900;letter-spacing:4px;transform:skewX(-6deg);margin-bottom:10px;background:linear-gradient(135deg,#ffee00,#cc44ff,#ffaa00);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 18px rgba(200,80,255,0.8));text-align:center;">SPACE RANGERS</div>
   <div class="go-h" style="color:#ff4444;text-shadow:0 0 40px rgba(255,68,68,0.6);">SOLAR SYSTEM LOST</div>
   <div class="go-sub">The AI delivered 10 warp cores. Your solar system was consumed.<br>Score: <span id="goScore">0</span> — Level: <span id="goLevel">1</span></div>
   <button class="big-btn red" id="restartBtn">TRY AGAIN</button>
 </div>
 <div class="screen hidden" id="levelUpScreen">
+  <div style="font-family:'Orbitron',monospace;font-size:clamp(28px,7vw,52px);font-weight:900;letter-spacing:4px;transform:skewX(-6deg);margin-bottom:10px;background:linear-gradient(135deg,#ffee00,#cc44ff,#ffaa00);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 18px rgba(200,80,255,0.8));text-align:center;">SPACE RANGERS</div>
   <div class="go-h" style="color:#00d4ff;text-shadow:0 0 40px rgba(0,212,255,0.6);">WARP CORES SECURED</div>
   <div class="go-sub">Advancing to Level <span id="luLevel">2</span><br>+1 AI Competitor • Score Carries Over</div>
   <button class="big-btn cyan" id="nextLevelBtn">WARP IN</button>
@@ -1292,7 +1294,8 @@ function updatePlayer(dt){
   }
 
   // Black hole delivery check FIRST — before shop opens
-  if(blackHole.towedBy==='player'&&dst(blackHole.x,blackHole.y,STARPORT_POS.x,STARPORT_POS.y)<90){
+  // Use X-only distance since BH travels on a fixed horizontal path (different Y than starport)
+  if(blackHole.towedBy==='player'&&Math.abs(blackHole.x-STARPORT_POS.x)<140){
     spawnParts(blackHole.x,blackHole.y,50,['#aa00ff','#ffdd44','#ffffff','#6600cc'],7);
     sfxDeliver();sfxShipExplosion();
     credits+=1000;score+=5000;
@@ -1747,6 +1750,7 @@ function updateBlackHole(dt){
     // Press fire to release harness and start shooting
     if((keys['Space']||btn.fire)&&!fireLast){
       bh.towedBy=null;
+      fireLast=false; // allow immediate fire next frame
       showAlert('HARNESS RELEASED — FIRING!',1500);
     }
   }
@@ -1777,7 +1781,7 @@ function updateBlackHole(dt){
         bh.x=dep.x-(dep.vx>=0?70:-70);
         bh.y=dep.y;
         // Delivered to starport?
-        if(dst(bh.x,bh.y,STARPORT_POS.x,STARPORT_POS.y)<90){
+        if(Math.abs(bh.x-STARPORT_POS.x)<140){
           spawnParts(bh.x,bh.y,50,['#aa00ff','#ffdd44','#ffffff'],7);
           sfxDeliver();sfxShipExplosion();
           credits+=1000;score+=5000;
@@ -2042,6 +2046,37 @@ function drawShieldRing(x,y,hp,maxHp,invincible){
 /* ═══════════════════════════════════════════════════════════
    DRAW WORLD
 ═══════════════════════════════════════════════════════════ */
+function drawGameTitle(){
+  // Drawn in screen space before camera transform
+  var t=Date.now();
+  var shine=(t*0.0006)%1; // 0→1 sweeping shine
+  ctx.save();
+  ctx.translate(VW/2, VH*0.10);
+  ctx.rotate(-0.06);
+  // Drop shadow
+  ctx.shadowColor='rgba(180,0,255,0.7)';
+  ctx.shadowBlur=28;
+  // Gradient fill — purple to yellow
+  var grd=ctx.createLinearGradient(-200,0,200,0);
+  grd.addColorStop(0,'#cc44ff');
+  grd.addColorStop(0.45,'#ffee00');
+  grd.addColorStop(1,'#ff8800');
+  ctx.font='bold clamp(22px,5vw,38px) Orbitron,monospace';
+  ctx.letterSpacing='4px';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillStyle=grd;
+  ctx.fillText('SPACE RANGERS',0,0);
+  // Shine sweep
+  var sg=ctx.createLinearGradient(-200+shine*500,0,-120+shine*500,0);
+  sg.addColorStop(0,'rgba(255,255,255,0)');
+  sg.addColorStop(0.5,'rgba(255,255,255,0.55)');
+  sg.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=sg;
+  ctx.fillText('SPACE RANGERS',0,0);
+  ctx.restore();
+}
+
 function drawWorld(){
   // Stars — screen space with gentle parallax (0.12x camera drift)
   for(var i=0;i<bgStars.length;i++){
@@ -2593,7 +2628,7 @@ function drawMinimap(){
 function draw(now){
   ctx.clearRect(0,0,VW,VH);
   ctx.fillStyle='rgba(0,0,8,1)';ctx.fillRect(0,0,VW,VH);
-  if(gameActive){drawWorld();drawMinimap();}
+  if(gameActive){drawWorld();drawMinimap();drawGameTitle();}
 }
 
 /* ═══════════════════════════════════════════════════════════
